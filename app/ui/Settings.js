@@ -13,7 +13,7 @@ export default function Settings({ settings, setSettings, close, theme, toggleTh
     await fetch('/api/settings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
   }
   const Row = ({ label, hint, children }) => (<div className="setrow"><span><b>{label}</b><small>{hint}</small></span><span>{children}</span></div>);
-  const Toggle = ({ k, label, hint }) => (<Row label={label} hint={hint}><label className="switch"><input type="checkbox" checked={settings[k] === '1'} onChange={(e) => save({ [k]: e.target.checked ? '1' : '0' })} /><span /></label></Row>);
+  const Toggle = ({ k, label, hint }) => (<Row label={label} hint={hint}><span className="onoff"><em>{settings[k] === '1' ? 'On' : 'Off'}</em><label className="switch"><input type="checkbox" checked={settings[k] === '1'} onChange={(e) => save({ [k]: e.target.checked ? '1' : '0' })} /><span /></label></span></Row>);
   const Num = ({ k, label, hint, min, max, step }) => (<Row label={label} hint={hint}><input type="number" min={min} max={max} step={step || 1} value={settings[k] ?? ''} onChange={(e) => save({ [k]: e.target.value })} /></Row>);
   const Text = ({ k, label, hint }) => (<Row label={label} hint={hint}><input type="text" value={settings[k] || ''} onChange={(e) => save({ [k]: e.target.value })} /></Row>);
   const Model = ({ k1, k2, models, label, hint }) => (<Row label={label} hint={hint}><select value={`${settings[k1]}|${settings[k2]}`} onChange={(e) => { const [a, b] = e.target.value.split('|'); save({ [k1]: a, [k2]: b }); }}>{Object.entries(models).flatMap(([p, ms]) => ms.map((m) => <option key={p + m} value={`${p}|${m}`}>{p} · {m}</option>))}</select></Row>);
@@ -44,11 +44,12 @@ export default function Settings({ settings, setSettings, close, theme, toggleTh
           <Row label="Right now" hint={`Today $${settings.spend?.today?.toFixed(2) ?? '0.00'} · total $${settings.spend?.total?.toFixed(2) ?? '0.00'} · ${settings.spend?.calls ?? 0} calls`}><span className="mono">avg EN ${settings.avg?.en?.toFixed(2)} · FR ${settings.avg?.fr?.toFixed(2)}</span></Row>
         </div>
         <div className="card"><h3>Overnight</h3>
-          <Toggle k="overnight_fr" label="Then French" hint="Submit the French batch automatically when the English lands." />
-          <Toggle k="overnight_covers" label="Then covers" hint="Generate cover images after the text. Keep off until the visual style is settled." />
+          <p className="muted small" style={{ margin: '.6rem 0 0' }}>What the Overnight button does after the English batch has landed.</p>
+          <Toggle k="overnight_fr" label="Also write the French" hint="On: the French batch is submitted automatically once the English is in. Off: Overnight stops after the English." />
+          <Toggle k="overnight_covers" label="Also generate the covers" hint="On: cover images are made after the text, a few at a time. Off: no images (recommended until the visual style is settled)." />
         </div>
         <div className="card"><h3>Covers</h3>
-          <Toggle k="image_prompts" label="Image prompts in articles" hint="Off: articles carry no image fields at all (no placeholder on the site). On: each article gets an imagePrompt and points at covers/<slug>.jpg." />
+          <Toggle k="image_prompts" label="Plan a cover for each article" hint="On: every new article gets an image prompt and a cover path in its front matter, ready for the Covers button. Off: articles carry no image fields at all." />
           <Model k1="image_provider" k2="image_model" models={settings.imageModels} label="Image model" hint="Google matches a reference photo; OpenAI doesn't." />
           <p className="muted small" style={{ margin: '.6rem 0 0' }}>Reference photos — every cover is generated in the style of the photo of its category, or of the default when the category has none.</p>
           <RefRow category="" />
@@ -56,12 +57,12 @@ export default function Settings({ settings, setSettings, close, theme, toggleTh
         </div>
         <div className="card"><h3>Publishing</h3>
           <Text k="publish_prefix" label="Commit message prefix" hint="Appears in the site repository's history." />
-          <Toggle k="publish_covers" label="Publish covers with articles" hint="Off: only the two Markdown files are committed." />
-          <Toggle k="confirm_publish" label="Ask before publishing" hint="A confirmation on the Publish button." />
-          <Toggle k="republish_on_save" label="Republish when I save an edit" hint="An already-published article goes straight back to the site when you save it." />
+          <Toggle k="publish_covers" label="Send the cover image with the article" hint="On: the cover is committed to the site along with the two Markdown files. Off: text only." />
+          <Toggle k="confirm_publish" label="Ask me to confirm before publishing" hint="On: the Publish button asks first. Off: it publishes immediately." />
+          <Toggle k="republish_on_save" label="Republish a live article when I save an edit" hint="On: saving an edit to an article that is already on the site sends the new version straight to the site." />
         </div>
         <div className="card"><h3>Interface</h3>
-          <Row label="Theme" hint="Follows your device until you choose."><button className="chip" onClick={toggleTheme}>{theme === 'dark' ? 'dark → light' : 'light → dark'}</button></Row>
+          <Row label="Theme" hint="Follows your device until you choose. Also in the ≡ menu of the bottom bar."><button className="chip" onClick={toggleTheme}>{theme === 'dark' ? 'switch to light' : 'switch to dark'}</button></Row>
           <Num k="poll_seconds" label="Refresh every (seconds)" hint="How often the list, the log and the spend update." min={3} max={60} />
         </div>
         <div className="card"><h3>Housekeeping</h3>

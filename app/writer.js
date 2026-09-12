@@ -23,7 +23,7 @@ export default function Writer() {
   const [sel, setSel] = useState(() => new Set());
   const [q, setQ] = useState(''); const [cat, setCat] = useState(''); const [st, setSt] = useState('');
   const [logs, setLogs] = useState([]); const [jobs, setJobs] = useState([]);
-  const [busy, setBusy] = useState(''); const [progress, setProgress] = useState('');
+  const [busy, setBusy] = useState(''); const [progress, setProgress] = useState(''); const [current, setCurrent] = useState('');
   const [open, setOpen] = useState(null);
   const [settings, setSettings] = useState(null);
   const [showLog, setShowLog] = useState(false); const [showSettings, setShowSettings] = useState(false); const [menu, setMenu] = useState('');
@@ -80,13 +80,14 @@ export default function Writer() {
       for (let i = 0; i < all.length; i += chunk) {
         await waitIfPaused(); if (stopRef.current) break;
         setProgress(`${Math.min(i + chunk, all.length)}/${all.length}`);
+        setCurrent(all.slice(i, i + chunk).map((id) => (rows || []).find((x) => x.id === id)?.title_en || id).join(' · '));
         const r = await j(url, { ...body, ids: all.slice(i, i + chunk) });
         if (r.error) { toast(r.error, 'err'); break; }
         loadPlan();
       }
       toast(stopRef.current ? 'Stopped' : 'Finished');
     }
-    setProgress(''); setBusy(''); pauseRef.current = false; setPaused(false); loadPlan(); loadSettings();
+    setProgress(''); setCurrent(''); setBusy(''); pauseRef.current = false; setPaused(false); loadPlan(); loadSettings();
   }
   async function prepare() {
     setBusy('prepare');
@@ -105,17 +106,16 @@ export default function Writer() {
           <span className="brand">MAISON TAROT</span>
           <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="search titles and notes" />
           <select value={cat} onChange={(e) => setCat(e.target.value)}><option value="">all categories</option>{cats.map((c) => <option key={c}>{c}</option>)}</select>
-          <span className="icons">
-            <button className="ghost" title="Light / dark" onClick={toggleTheme}>{theme === 'dark' ? '☀' : '☾'}</button>
-            <button className="ghost" title="Settings" onClick={() => setShowSettings(true)}>⚙</button>
-          </span>
+          <span className="count" title="Published (English live) / all articles">{(rows || []).filter((r) => (r.type === 'article' || r.type === 'pillar') && r.status_en !== 'merged' && r.pub_en).length} / {(rows || []).filter((r) => (r.type === 'article' || r.type === 'pillar') && r.status_en !== 'merged').length}</span>
         </div>
-        <div className="chips">
-          {[['', 'all'], ['todo', 'to write'], ['queued', 'in batch'], ['written', 'done'], ['check', 'needs a look'], ['published', 'published'], ['stale', 'edited since publish'], ['nocover', 'no cover'], ['notes', 'with notes']].map(([v, l]) => <button key={v} className="chip" aria-pressed={st === v} onClick={() => setSt(v)}>{l}</button>)}
-          <span className="chip mini" style={{ border: 0, color: 'var(--muted)' }}>{shown.length} shown · {sel.size} selected</span>
-          <button className="chip" onClick={() => selectAll(true)}>select shown</button>
-          <button className="chip" onClick={() => setSel(new Set())}>none</button>
-          <button className="chip" onClick={prepare} disabled={!!busy} title={HELP.prepare}>prepare titles</button>
+        <div className="chipsrow">
+          <span className="pinned">
+            <button className="chip" onClick={() => (sel.size === shown.length && shown.length ? setSel(new Set()) : selectAll(true))} title="Select every article currently shown (or clear)">{sel.size === shown.length && shown.length ? 'none' : 'select all'}</button>
+          </span>
+          <div className="chips">
+            {[['', 'all'], ['todo', 'to write'], ['queued', 'in batch'], ['written', 'ready'], ['published', 'published'], ['stale', 'edited since publish'], ['check', 'needs a look'], ['nocover', 'no cover'], ['notes', 'with notes']].map(([v, l]) => <button key={v} className="chip" aria-pressed={st === v} onClick={() => setSt(v)}>{l}</button>)}
+            <button className="chip" onClick={prepare} disabled={!!busy} title={HELP.prepare}>prepare titles</button>
+          </div>
         </div>
       </header>
 
@@ -128,12 +128,12 @@ export default function Writer() {
               <div style={{ minWidth: 0 }}>
                 <div className="t">{r.title_en || <em className="muted">{r.title_fr}</em>}</div>
                 <div className="meta">
-                  <span className={`dot ${cls(r.status_en)}`} title={D(r.status_en, 'English')}><b />EN</span>
-                  <span className={`dot ${cls(r.status_fr)}`} title={D(r.status_fr, 'French')}><b />FR</span>
-                  <span className={`dot ${r.cover === 'done' ? 'written' : ''}`} title={r.cover === 'done' ? 'Cover generated' : 'No cover yet'}><b />cover</span>
-                  <span>{r.category}</span><span>{r.length}w</span>
+                  <span className={`dot ${r.pub_en === 'live' ? 'live' : cls(r.status_en)}`} title={r.pub_en === 'live' ? 'English: published, live on the site' : r.pub_en === 'stale' ? 'English: published, edited since' : D(r.status_en, 'English')}><b />EN</span>
+                  <span className={`dot ${r.pub_fr === 'live' ? 'live' : cls(r.status_fr)}`} title={r.pub_fr === 'live' ? 'French: published, live on the site' : r.pub_fr === 'stale' ? 'French: published, edited since' : D(r.status_fr, 'French')}><b />FR</span>
+                  <span className={`dot ${r.cover === 'done' ? 'live' : ''}`} title={r.cover === 'done' ? 'Cover generated' : 'No cover yet'}><b />cover</span>
+                  <span>{r.category}</span><span title={`English ${r.words_en || 0} words · French ${r.words_fr || 0} words · planned ${r.length}`}>{r.words_en ? `${r.words_en}w` : `${r.length}w planned`}</span>
                   {r.notes && <span className="note-ind" title={r.notes}>¶ notes</span>}
-                  {(r.pub_en || r.pub_fr) && <span className="pub" title={`Published: ${r.pub_en ? 'EN ' + r.pub_en : ''} ${r.pub_fr ? 'FR ' + r.pub_fr : ''}`}>● live{r.pub_en === 'stale' || r.pub_fr === 'stale' ? ' (edited)' : ''}</span>}
+                  {(r.pub_en === 'stale' || r.pub_fr === 'stale') && <span className="pub" title="Edited since it was published — save republishes">edited since publish</span>}
                 </div>
               </div>
               <span className="open mono">open →</span>
@@ -149,8 +149,10 @@ export default function Writer() {
       <button className={`logbubble${busy || jobs.length ? ' live' : ''}`} onClick={() => setShowLog((v) => !v)} title="Activity and costs">
         {busy ? `${progress || '…'} · ` : ''}{spend ? `$${spend.today.toFixed(2)} today` : 'log'}
       </button>
+      {busy && current && <div className="nowwriting">writing: {current}</div>}
       <div className={`log${showLog ? ' open' : ''}`}>
         <button className="close chip" onClick={() => setShowLog(false)}>close</button>
+        {busy && current && <div className="ok">now writing: {current}</div>}
         {spend && <div>${spend.today.toFixed(2)} today · ${spend.total.toFixed(2)} total · {spend.calls} calls{settings?.daily_cap_usd > 0 ? ` · cap $${settings.daily_cap_usd}` : ''}</div>}
         {jobs.length ? <div className="w">{jobs.length} batch job(s) running — results arrive on their own{jobs.map((jb) => <div key={jb.id}>· {jb.items?.length || 0} × {(jb.items?.[0]?.lang || '').toUpperCase()} submitted {new Date(jb.created_at).toLocaleTimeString()}{jb.chain ? ` → then ${jb.chain}` : ''}</div>)}</div> : null}
         {(() => { const q = (rows || []).filter((r) => r.status_en === 'queued' || r.status_fr === 'queued'); return q.length ? <div className="w">in queue: {q.map((r) => (r.title_en || r.title_fr).slice(0, 50)).join(' · ')}</div> : null; })()}
@@ -166,7 +168,18 @@ export default function Writer() {
         <button disabled={!!busy} title={HELP.publish} onClick={() => { if (settings?.confirm_publish === '0' || confirm(`Publish ${sel.size} article(s) to the site?`)) run('/api/publish', { ids: ids() }, 'publish', 5); }}>Publish</button>
         {busy && busy !== 'prepare' && <><span className="sep" /><button onClick={() => { pauseRef.current = !pauseRef.current; setPaused(pauseRef.current); }}>{paused ? 'Resume' : 'Pause'}</button><button onClick={() => { if (confirm('Stop after the current pair? Finished articles are kept.')) { stopRef.current = true; pauseRef.current = false; } }}>Stop</button></>}
         <span className="est">{sel.size ? `${sel.size} selected` : 'select rows to act'}</span>
-      </div></div>
+      </div>
+      <button className="ghost burger" title="Menu" onClick={() => setMenu(menu === 'more' ? '' : 'more')}>≡</button>
+      </div>
+      {menu === 'more' && (
+        <div className="pop right">
+          <button onClick={() => { toggleTheme(); setMenu(''); }}>{theme === 'dark' ? '☀ Light mode' : '☾ Dark mode'}</button>
+          <button onClick={() => { setShowSettings(true); setMenu(''); }}>⚙ Settings</button>
+          <button onClick={() => { setShowLog(true); setMenu(''); }}>Log and costs</button>
+          <button onClick={() => { window.open('https://github.com/joanacodes/maison-tarot/actions', '_blank'); setMenu(''); }}>Site builds ↗</button>
+          <button onClick={async () => { await fetch('/api/auth', { method: 'DELETE' }); location.reload(); }}>Sign out</button>
+        </div>
+      )}
       {menu === 'write' && (
             <div className="pop">
               <button onClick={() => run('/api/generate', { ids: ids(), en: true, fr: true }, 'now', chunk)}>Now, EN + FR <small>{HELP.now} {est('now')}</small></button>
