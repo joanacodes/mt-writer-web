@@ -28,7 +28,7 @@ export default function Detail({ row, close, onChange, inline }) {
     if (r.error) toast(r.error, 'err'); else toast('Done');
     await load(); onChange?.(); setBusy('');
   }
-  async function saveRaw() { await j('/api/article', { id: row.id, lang, body: draft }); await load(); setMode('read'); toast('Saved — this version is now protected from regeneration'); }
+  async function saveRaw() { const r = await j('/api/article', { id: row.id, lang, body: draft }); await load(); onChange?.(); setMode('read'); toast(r.warnings?.length ? 'Saved — still flagged: ' + r.warnings.join('; ') : 'Saved and re-checked: no warnings'); }
   async function publish() { if (!confirm('Publish this article (both languages and the cover) to the site?')) return; setBusy('pub'); const r = await j('/api/publish', { ids: [row.id] }); setBusy(''); toast(r.published?.length ? 'Published — the site is rebuilding' : 'Nothing published, see the log', r.published?.length ? '' : 'err'); await load(); }
   async function cover() { setBusy('cover'); const r = await j('/api/covers', { ids: [row.id] }); setBusy(''); toast(r.done?.length ? 'Cover generated' : 'No cover — see the log', r.done?.length ? '' : 'err'); await load(); }
 

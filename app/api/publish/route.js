@@ -27,7 +27,7 @@ export async function POST(req) {
         await putFile(`assets/covers/${safeSlug(cover.slug)}.jpg`, cover.data, `Cover: ${safeSlug(cover.slug)}`);
         await db.from('covers').update({ published_at: new Date().toISOString() }).eq('plan_id', id);
       }
-      await log(`${id}: published to GitHub`);
+      await log(`${id}: published — committed to ${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}; the site rebuilds in a minute or two (watch 'site build' lines)`);
       published.push(id);
     } catch (e) { await log(`${id}: publish ERROR ${e.message}`); }
   }

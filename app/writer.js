@@ -103,9 +103,10 @@ export default function Writer() {
           <span className="brand">MAISON TAROT</span>
           <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="search titles and notes" />
           <select value={cat} onChange={(e) => setCat(e.target.value)}><option value="">all categories</option>{cats.map((c) => <option key={c}>{c}</option>)}</select>
-          <span style={{ flex: 1 }} />
-          <button className="ghost" title="Light / dark" onClick={toggleTheme}>{theme === 'dark' ? '☀' : '☾'}</button>
-          <button className="ghost" title="Settings" onClick={() => setShowSettings(true)}>⚙</button>
+          <span className="icons">
+            <button className="ghost" title="Light / dark" onClick={toggleTheme}>{theme === 'dark' ? '☀' : '☾'}</button>
+            <button className="ghost" title="Settings" onClick={() => setShowSettings(true)}>⚙</button>
+          </span>
         </div>
         <div className="chips">
           {[['', 'all'], ['todo', 'to write'], ['queued', 'in batch'], ['written', 'done'], ['check', 'needs a look'], ['nocover', 'no cover'], ['notes', 'with notes']].map(([v, l]) => <button key={v} className="chip" aria-pressed={st === v} onClick={() => setSt(v)}>{l}</button>)}

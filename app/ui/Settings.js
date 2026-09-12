@@ -42,6 +42,7 @@ export default function Settings({ settings, setSettings, close, theme, toggleTh
           <Toggle k="overnight_covers" label="Then covers" hint="Generate cover images after the text. Keep off until the visual style is settled." />
         </div>
         <div className="card"><h3>Covers</h3>
+          <Toggle k="image_prompts" label="Image prompts in articles" hint="Off: articles carry no image fields at all (no placeholder on the site). On: each article gets an imagePrompt and points at covers/<slug>.jpg." />
           <Model k1="image_provider" k2="image_model" models={settings.imageModels} label="Image model" hint="Google matches a reference photo; OpenAI doesn't." />
           <Row label="Reference photo" hint={ref?.present ? `Set on ${new Date(ref.updated_at).toLocaleDateString()}. Every cover is generated in its style.` : 'None. Upload a JPEG you like; every cover will match it.'}><span style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}><input type="file" accept="image/jpeg" onChange={upload} style={{ width: '8.5rem', fontSize: 12 }} />{ref?.present && <button className="chip" onClick={async () => { await fetch('/api/reference', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: '' }) }); setRef({ present: false }); }}>remove</button>}</span></Row>
         </div>
@@ -57,6 +58,7 @@ export default function Settings({ settings, setSettings, close, theme, toggleTh
         <div className="card"><h3>Housekeeping</h3>
           <Row label="Clear the log" hint="Removes the activity lines. Costs are kept."><button className="chip" onClick={() => maint('clear_logs', 'Clear the activity log?')}>clear</button></Row>
           <Row label="Reset queued rows" hint="If a batch was lost: rows back to “to write”, open jobs abandoned."><button className="chip" onClick={() => maint('reset_queued', 'Reset all queued rows and abandon open batches?')}>reset</button></Row>
+          <Row label="Re-check all articles" hint="Re-runs the checks on every stored article with today's rules and fixes the translation keys. No API cost."><button className="chip" onClick={() => maint('recheck', 'Re-validate every stored article?')}>re-check</button></Row>
           <Row label="Empty the cover queue" hint="Drops pending and failed cover jobs."><button className="chip" onClick={() => maint('clear_cover_queue', 'Empty the cover queue?')}>empty</button></Row>
           <Row label="Sign out" hint="On this device."><button className="chip" onClick={async () => { await fetch('/api/auth', { method: 'DELETE' }); location.reload(); }}>sign out</button></Row>
         </div>
