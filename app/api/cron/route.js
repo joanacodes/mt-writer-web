@@ -66,7 +66,7 @@ export async function GET(req) {
   // covers, a few per run
   const { data: q } = await db.from('queue').select('*').eq('status', 'pending').eq('kind', 'cover').order('id').limit(4);
   if (q?.length) {
-    const reference = await doc('reference_jpg_base64');
+    const refFor = async (category) => (await doc(`reference_${String(category || '').toLowerCase().replace(/[^a-z0-9]+/g, '_')}_jpg_base64`)) || (await doc('reference_jpg_base64'));
     for (const item of q) {
       await db.from('queue').update({ status: 'working' }).eq('id', item.id);
       try {
@@ -74,7 +74,7 @@ export async function GET(req) {
         const { data: art } = await db.from('articles').select('body').eq('plan_id', item.plan_id).eq('lang', 'en').maybeSingle();
         const prompt = art ? frontMatter(art.body)[0]?.imagePrompt : null;
         if (!row || !prompt) throw new Error('no prompt');
-        const b64 = await callImage({ provider: st.image_provider, model: st.image_model, prompt, referenceB64: reference || null });
+        const b64 = await callImage({ provider: st.image_provider, model: st.image_model, prompt, referenceB64: (await refFor(row.category)) || null });
         await db.from('covers').upsert({ plan_id: row.id, slug: row.slug_en, mime: 'image/jpeg', data: b64, prompt, published_at: null });
         await db.from('plan').update({ cover: 'done' }).eq('id', row.id);
         const cost = await record({ plan_id: row.id, kind: 'image', provider: st.image_provider, model: st.image_model, image: true });
@@ -86,6 +86,23 @@ export async function GET(req) {
       }
     }
   }
+  // one-time re-check after a deploy that changed the rules (clears stale warnings such as old translationKey mismatches)
+  try {
+    const RULES = 'v3';
+    const { data: seen } = await db.from('settings').select('value').eq('key', 'rules_version').maybeSingle();
+    if (seen?.value !== RULES) {
+      const { data: arts } = await db.from('articles').select('plan_id,lang,body');
+      for (const a of arts || []) {
+        const { data: row } = await db.from('plan').select('*').eq('id', a.plan_id).maybeSingle(); if (!row) continue;
+        const body = a.body.replace(/^translationKey:.*$/m, `translationKey: "post-${row.slug_en}"`);
+        const { problems, words } = validate(body, row, a.lang, paths, { imagePrompts: st.image_prompts === '1' });
+        await db.from('articles').update({ body, words, warnings: problems.join('; ') }).eq('plan_id', a.plan_id).eq('lang', a.lang);
+        await db.from('plan').update({ [`status_${a.lang}`]: problems.length ? 'check' : 'written' }).eq('id', row.id);
+      }
+      await db.from('settings').upsert({ key: 'rules_version', value: RULES });
+      await log(`rules ${RULES}: ${(arts || []).length} article(s) re-checked`);
+    }
+  } catch {}
   // site build status, reported once per run id
   try {
     const run = await latestRun();

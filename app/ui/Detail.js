@@ -5,7 +5,7 @@ import { toast } from './Toasts';
 
 const j = (url, body, method = 'POST') => fetch(url, { method, headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }).then((r) => r.json());
 
-export default function Detail({ row, close, onChange, inline }) {
+export default function Detail({ row, close, onChange, inline, settings }) {
   const [data, setData] = useState(null);
   const [lang, setLang] = useState('en');
   const [mode, setMode] = useState('read'); // read | raw
@@ -28,7 +28,14 @@ export default function Detail({ row, close, onChange, inline }) {
     if (r.error) toast(r.error, 'err'); else toast('Done');
     await load(); onChange?.(); setBusy('');
   }
-  async function saveRaw() { const r = await j('/api/article', { id: row.id, lang, body: draft }); await load(); onChange?.(); setMode('read'); toast(r.warnings?.length ? 'Saved — still flagged: ' + r.warnings.join('; ') : 'Saved and re-checked: no warnings'); }
+  async function saveRaw() {
+    const r = await j('/api/article', { id: row.id, lang, body: draft });
+    setMode('read');
+    const wasPublished = !!(data?.articles || []).find((a) => a.lang === lang)?.published_at;
+    if (wasPublished && settings?.republish_on_save !== '0') { const p = await j('/api/publish', { ids: [row.id] }); toast(p.published?.length ? 'Saved and republished — the site is rebuilding' : 'Saved, but republishing failed — see the log', p.published?.length ? '' : 'err'); }
+    else toast(r.warnings?.length ? 'Saved — still flagged: ' + r.warnings.join('; ') : 'Saved and re-checked: no warnings');
+    await load(); onChange?.();
+  }
   async function publish() { if (!confirm('Publish this article (both languages and the cover) to the site?')) return; setBusy('pub'); const r = await j('/api/publish', { ids: [row.id] }); setBusy(''); toast(r.published?.length ? 'Published — the site is rebuilding' : 'Nothing published, see the log', r.published?.length ? '' : 'err'); await load(); }
   async function cover() { setBusy('cover'); const r = await j('/api/covers', { ids: [row.id] }); setBusy(''); toast(r.done?.length ? 'Cover generated' : 'No cover — see the log', r.done?.length ? '' : 'err'); await load(); }
 
@@ -57,7 +64,7 @@ export default function Detail({ row, close, onChange, inline }) {
         </div>
 
         <p className="status">
-          {art ? `${art.words || 0} words · ${art.edited ? 'edited by hand · ' : ''}${art.published_at ? 'published ' + new Date(art.published_at).toLocaleDateString() + ' · ' : 'not published · '}` : ''}
+          {art ? `${art.words || 0} words · ${art.edited ? 'edited by hand · ' : ''}${art.published_at ? 'published ' + new Date(art.published_at).toLocaleDateString() + (new Date(art.updated_at) > new Date(art.published_at) ? ' (edited since — save republishes)' : '') + ' · ' : 'not published · '}` : ''}
           {data ? `cost so far $${Number(data.cost || 0).toFixed(2)}` : ''}{data?.cover ? ` · cover ${data.cover.published_at ? 'published' : 'ready'}` : ''}
         </p>
         {art?.warnings && <p className="warn">⚠ {art.warnings}</p>}

@@ -3,8 +3,11 @@ import { useEffect, useState } from 'react';
 import { toast } from './Toasts';
 
 export default function Settings({ settings, setSettings, close, theme, toggleTheme }) {
-  const [ref, setRef] = useState(null);
-  useEffect(() => { fetch('/api/reference').then((r) => r.json()).then(setRef); }, []);
+  const [refs, setRefs] = useState({});
+  const loadRefs = () => fetch('/api/reference').then((r) => r.json()).then((d) => setRefs(d.refs || {}));
+  useEffect(() => { loadRefs(); }, []);
+  const CATS = ['Learn', 'Practice', 'Ideas we refuse', 'Trends', 'Astrology, tested', 'For readers', 'Card meanings', 'Stories & experience', 'Seasonal', 'Method'];
+  const rkey = (c) => (c ? `reference_${c.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_jpg_base64` : 'reference_jpg_base64');
   async function save(patch) {
     setSettings({ ...settings, ...patch });
     await fetch('/api/settings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
@@ -14,12 +17,14 @@ export default function Settings({ settings, setSettings, close, theme, toggleTh
   const Num = ({ k, label, hint, min, max, step }) => (<Row label={label} hint={hint}><input type="number" min={min} max={max} step={step || 1} value={settings[k] ?? ''} onChange={(e) => save({ [k]: e.target.value })} /></Row>);
   const Text = ({ k, label, hint }) => (<Row label={label} hint={hint}><input type="text" value={settings[k] || ''} onChange={(e) => save({ [k]: e.target.value })} /></Row>);
   const Model = ({ k1, k2, models, label, hint }) => (<Row label={label} hint={hint}><select value={`${settings[k1]}|${settings[k2]}`} onChange={(e) => { const [a, b] = e.target.value.split('|'); save({ [k1]: a, [k2]: b }); }}>{Object.entries(models).flatMap(([p, ms]) => ms.map((m) => <option key={p + m} value={`${p}|${m}`}>{p} · {m}</option>))}</select></Row>);
-  async function upload(e) {
+  async function upload(e, category) {
     const f = e.target.files?.[0]; if (!f) return;
     const b64 = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.readAsDataURL(f); });
-    const r = await fetch('/api/reference', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: b64 }) }).then((x) => x.json());
-    if (r.error) toast(r.error, 'err'); else { setRef({ present: true, updated_at: new Date().toISOString() }); toast('Reference photo saved'); }
+    const r = await fetch('/api/reference', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: b64, category }) }).then((x) => x.json());
+    if (r.error) toast(r.error, 'err'); else { toast(`Reference saved${category ? ' for ' + category : ''}`); loadRefs(); }
   }
+  async function removeRef(category) { await fetch('/api/reference', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: '', category }) }); loadRefs(); }
+  const RefRow = ({ category }) => (<Row label={category || 'All categories (default)'} hint={refs[rkey(category)] ? `Set on ${new Date(refs[rkey(category)]).toLocaleDateString()}.` : (category ? 'Falls back to the default.' : 'None yet. Upload a JPEG you like.')}><span style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}><input type="file" accept="image/jpeg" onChange={(e) => upload(e, category)} style={{ width: '8.5rem', fontSize: 12 }} />{refs[rkey(category)] && <button className="chip" onClick={() => removeRef(category)}>remove</button>}</span></Row>);
   async function maint(action, msg) { if (!confirm(msg)) return; await fetch('/api/maintenance', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action }) }); toast('Done'); }
   const allText = Object.entries(settings.textModels || {}).flatMap(([p, ms]) => ms.map((m) => ({ p, m })));
   return (
@@ -29,6 +34,7 @@ export default function Settings({ settings, setSettings, close, theme, toggleTh
         <div className="card"><h3>Writing</h3>
           <Model k1="provider" k2="model" models={settings.textModels} label="Model" hint="Who writes the articles. Batch and Overnight need an Anthropic model." />
           <Row label="Cheap model" hint="Used for title preparation and other small jobs. Set to the writing model to disable."><select value={settings.cheap_model || 'none'} onChange={(e) => save({ cheap_model: e.target.value })}>{allText.map(({ p, m }) => <option key={m} value={m}>{p} · {m}</option>)}</select></Row>
+          <Row label="Reasoning control" hint="How the app asks the model not to think at length before writing (thinking costs the most expensive tokens). Try each and compare 'out' in the log."><select value={settings.reasoning || 'thinking_off'} onChange={(e) => save({ reasoning: e.target.value })}><option value="thinking_off">thinking off</option><option value="effort_low">effort low</option><option value="plain">plain request</option></select></Row>
           <Num k="max_retries" label="Second attempt when a draft is short" hint="The writer gets its own draft back to expand it. 0 = never; 1 = once. Each attempt costs about as much as the article." min={0} max={2} />
           <Num k="default_length" label="Default length (words)" hint="Used when a row has no length of its own." min={400} max={2500} step={50} />
           <Num k="chunk_live" label="Articles per request (Write)" hint="Lower it if you ever see timeouts." min={1} max={4} />
@@ -44,12 +50,15 @@ export default function Settings({ settings, setSettings, close, theme, toggleTh
         <div className="card"><h3>Covers</h3>
           <Toggle k="image_prompts" label="Image prompts in articles" hint="Off: articles carry no image fields at all (no placeholder on the site). On: each article gets an imagePrompt and points at covers/<slug>.jpg." />
           <Model k1="image_provider" k2="image_model" models={settings.imageModels} label="Image model" hint="Google matches a reference photo; OpenAI doesn't." />
-          <Row label="Reference photo" hint={ref?.present ? `Set on ${new Date(ref.updated_at).toLocaleDateString()}. Every cover is generated in its style.` : 'None. Upload a JPEG you like; every cover will match it.'}><span style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}><input type="file" accept="image/jpeg" onChange={upload} style={{ width: '8.5rem', fontSize: 12 }} />{ref?.present && <button className="chip" onClick={async () => { await fetch('/api/reference', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: '' }) }); setRef({ present: false }); }}>remove</button>}</span></Row>
+          <p className="muted small" style={{ margin: '.6rem 0 0' }}>Reference photos — every cover is generated in the style of the photo of its category, or of the default when the category has none.</p>
+          <RefRow category="" />
+          {CATS.map((c) => <RefRow key={c} category={c} />)}
         </div>
         <div className="card"><h3>Publishing</h3>
           <Text k="publish_prefix" label="Commit message prefix" hint="Appears in the site repository's history." />
           <Toggle k="publish_covers" label="Publish covers with articles" hint="Off: only the two Markdown files are committed." />
           <Toggle k="confirm_publish" label="Ask before publishing" hint="A confirmation on the Publish button." />
+          <Toggle k="republish_on_save" label="Republish when I save an edit" hint="An already-published article goes straight back to the site when you save it." />
         </div>
         <div className="card"><h3>Interface</h3>
           <Row label="Theme" hint="Follows your device until you choose."><button className="chip" onClick={toggleTheme}>{theme === 'dark' ? 'dark → light' : 'light → dark'}</button></Row>

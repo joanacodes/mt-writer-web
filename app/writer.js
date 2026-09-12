@@ -55,6 +55,8 @@ export default function Writer() {
       : st === 'nocover' ? r.cover !== 'done'
       : st === 'queued' ? r.status_en === 'queued' || r.status_fr === 'queued'
       : st === 'notes' ? !!r.notes
+      : st === 'published' ? !!(r.pub_en || r.pub_fr)
+      : st === 'stale' ? r.pub_en === 'stale' || r.pub_fr === 'stale'
       : r.status_en === 'todo' || r.status_fr === 'todo'))), [rows, q, cat, st]);
   const ids = () => [...sel];
   const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -109,7 +111,7 @@ export default function Writer() {
           </span>
         </div>
         <div className="chips">
-          {[['', 'all'], ['todo', 'to write'], ['queued', 'in batch'], ['written', 'done'], ['check', 'needs a look'], ['nocover', 'no cover'], ['notes', 'with notes']].map(([v, l]) => <button key={v} className="chip" aria-pressed={st === v} onClick={() => setSt(v)}>{l}</button>)}
+          {[['', 'all'], ['todo', 'to write'], ['queued', 'in batch'], ['written', 'done'], ['check', 'needs a look'], ['published', 'published'], ['stale', 'edited since publish'], ['nocover', 'no cover'], ['notes', 'with notes']].map(([v, l]) => <button key={v} className="chip" aria-pressed={st === v} onClick={() => setSt(v)}>{l}</button>)}
           <span className="chip mini" style={{ border: 0, color: 'var(--muted)' }}>{shown.length} shown · {sel.size} selected</span>
           <button className="chip" onClick={() => selectAll(true)}>select shown</button>
           <button className="chip" onClick={() => setSel(new Set())}>none</button>
@@ -131,16 +133,17 @@ export default function Writer() {
                   <span className={`dot ${r.cover === 'done' ? 'written' : ''}`} title={r.cover === 'done' ? 'Cover generated' : 'No cover yet'}><b />cover</span>
                   <span>{r.category}</span><span>{r.length}w</span>
                   {r.notes && <span className="note-ind" title={r.notes}>¶ notes</span>}
+                  {(r.pub_en || r.pub_fr) && <span className="pub" title={`Published: ${r.pub_en ? 'EN ' + r.pub_en : ''} ${r.pub_fr ? 'FR ' + r.pub_fr : ''}`}>● live{r.pub_en === 'stale' || r.pub_fr === 'stale' ? ' (edited)' : ''}</span>}
                 </div>
               </div>
               <span className="open mono">open →</span>
             </div>
           ))}
         </div>
-        {wide ? (open ? <Detail row={open} inline close={() => setOpen(null)} onChange={loadPlan} /> : <div className="detail"><p className="empty">Select an article to read it, write notes, regenerate or publish.</p></div>) : null}
+        {wide ? (open ? <Detail row={open} inline close={() => setOpen(null)} onChange={loadPlan} settings={settings} /> : <div className="detail"><p className="empty">Select an article to read it, write notes, regenerate or publish.</p></div>) : null}
       </div>
 
-      {!wide && open && <Detail row={open} close={() => setOpen(null)} onChange={loadPlan} />}
+      {!wide && open && <Detail row={open} close={() => setOpen(null)} onChange={loadPlan} settings={settings} />}
       {showSettings && settings && <Settings settings={settings} setSettings={setSettings} close={() => setShowSettings(false)} theme={theme} toggleTheme={toggleTheme} />}
 
       <button className={`logbubble${busy || jobs.length ? ' live' : ''}`} onClick={() => setShowLog((v) => !v)} title="Activity and costs">
@@ -149,7 +152,8 @@ export default function Writer() {
       <div className={`log${showLog ? ' open' : ''}`}>
         <button className="close chip" onClick={() => setShowLog(false)}>close</button>
         {spend && <div>${spend.today.toFixed(2)} today · ${spend.total.toFixed(2)} total · {spend.calls} calls{settings?.daily_cap_usd > 0 ? ` · cap $${settings.daily_cap_usd}` : ''}</div>}
-        {jobs.length ? <div className="w">{jobs.length} batch job(s) running — results arrive on their own</div> : null}
+        {jobs.length ? <div className="w">{jobs.length} batch job(s) running — results arrive on their own{jobs.map((jb) => <div key={jb.id}>· {jb.items?.length || 0} × {(jb.items?.[0]?.lang || '').toUpperCase()} submitted {new Date(jb.created_at).toLocaleTimeString()}{jb.chain ? ` → then ${jb.chain}` : ''}</div>)}</div> : null}
+        {(() => { const q = (rows || []).filter((r) => r.status_en === 'queued' || r.status_fr === 'queued'); return q.length ? <div className="w">in queue: {q.map((r) => (r.title_en || r.title_fr).slice(0, 50)).join(' · ')}</div> : null; })()}
         {logs.map((l) => <div key={l.id} className={/ERROR/.test(l.line) ? 'err' : /⚠/.test(l.line) ? 'w' : /words|stored|published|generated/.test(l.line) ? 'ok' : ''}>{new Date(l.at).toLocaleTimeString()}  {l.line}</div>)}
         {!logs.length && <div>no activity yet</div>}
       </div>

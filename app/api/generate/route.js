@@ -13,7 +13,7 @@ async function writeOne(row, lang, paths, st, enBody) {
   const today = new Date().toISOString().slice(0, 10);
   const system = await systemFor(lang, paths);
   const user = lang === 'en' ? userEn(row, today, st) : userFr(row, enBody, paths, today, st);
-  let r = await callText({ provider: st.provider, model: st.model, system, user });
+  let r = await callText({ provider: st.provider, model: st.model, system, user, reasoning: st.reasoning || 'thinking_off' });
   const u0 = normalise(st.provider, r.usage); const tok = { ...u0 };
   let cost = await record({ plan_id: row.id, lang, kind: 'text', provider: st.provider, model: st.model, usage: u0 });
   const enFm = enBody ? frontMatter(enBody)[0] : null;
@@ -25,7 +25,7 @@ async function writeOne(row, lang, paths, st, enBody) {
   // Only a genuinely short or truncated draft is worth a second call; everything else is accepted with a warning.
   const worth = (ps) => ps.some((p) => /^length \d+ vs/.test(p) || /cut at the token/.test(p) || /no front matter/.test(p));
   for (let attempt = 0; attempt < Number(st.max_retries ?? 1) && problems.length && worth(problems); attempt++) {
-    r = await callText({ provider: st.provider, model: st.model, system, user: expandUser(lang, text, problems, Number(row.length || 900)) });
+    r = await callText({ provider: st.provider, model: st.model, system, user: expandUser(lang, text, problems, Number(row.length || 900)), reasoning: st.reasoning || 'thinking_off' });
     const u1 = normalise(st.provider, r.usage); for (const k of Object.keys(u1)) tok[k] = (tok[k] || 0) + u1[k];
     cost += await record({ plan_id: row.id, lang, kind: 'text', provider: st.provider, model: st.model, usage: u1 });
     const nf = finish(stripFences(r.text), row, lang, paths, enFm, opts);
